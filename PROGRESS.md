@@ -26,3 +26,40 @@
 ## Next steps
 - Provide a real `DATABASE_URL` (Supabase) + LLM key in `.env`, then `./run.sh` to backfill and launch.
 - Optional: skip empty offseason date chunks during multi-year backfills (minor efficiency).
+
+---
+
+## Checkpoint 2 — 5-year backfill tooling (2021–2025)
+
+### Files created
+- `scripts/init_supabase.sql` — schema + indexes on (game_date, game_year, player_name,
+  pitch_type, events, launch_speed_angle) incl. a partial barrel index; `ingest_checkpoints`
+  table; materialized views `mv_pitcher_arsenals` and `mv_batter_barrels` (+ their indexes).
+- `scripts/backfill_5_years.py` — resumable 5-day-chunk backfill for 2021–2025 via
+  `execute_values` (batch 2000). Runs the init SQL first, records per-chunk checkpoints
+  (skip-if-done), refreshes both materialized views, and runs `VACUUM ANALYZE` on completion.
+  numpy→PG coercion + NaT-safe date handling; connection in try/finally; TLS enforced.
+- `tests/test_backfill_script.py` — helper + SQL-contract tests.
+
+### Test results
+- `pytest`: **56 passed, 1 skipped**. Scripts byte-compile; numpy/NaN/NaT coercion verified.
+
+### Design note — `mv_batter_barrels`
+Raw Statcast `player_name` is the **pitcher**; batters are keyed by the `batter` MLBAM id.
+The batter-barrel view therefore aggregates by `batter` + `game_year` (barrels =
+`launch_speed_angle = 6`, batted balls = `type = 'X'`), with barrel% and average EV/LA.
+
+### EXECUTION STATUS — not run from this environment (blocked, not skipped)
+The schema init and the ~3.5M-row backfill were **written and validated but NOT executed here**:
+- `list_projects` shows **no Supabase project** on the account, and there is no `DATABASE_URL`
+  credential available for a direct `psycopg2` connection.
+- `pybaseball` is not installed and the job is a 20–35 min, large outbound-data operation.
+
+To run it (from your machine or any host with the `.env` credentials):
+```bash
+pip install -r requirements.txt
+python scripts/backfill_5_years.py                 # full 2021–2025, resumable
+# or a subset:
+python scripts/backfill_5_years.py --years 2024 2025
+```
+Because of `ingest_checkpoints`, the job can be stopped and restarted with no duplicate downloads.
