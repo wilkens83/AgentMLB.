@@ -51,7 +51,10 @@ CREATE TABLE IF NOT EXISTS statcast_pitches (
     iso_value DOUBLE PRECISION,
     launch_speed_angle INT,
     at_bat_number INT,
-    pitch_number INT
+    pitch_number INT,
+    inning INT,
+    outs_when_up INT,
+    inning_topbot VARCHAR(10)
 );
 
 -- 2. Performance Indexes for Fast Text-to-SQL Execution

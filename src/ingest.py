@@ -41,6 +41,7 @@ COLS: List[str] = [
     "estimated_ba_using_speedangle", "estimated_woba_using_speedangle",
     "woba_value", "woba_denom", "babip_value", "iso_value",
     "launch_speed_angle", "at_bat_number", "pitch_number",
+    "inning", "outs_when_up", "inning_topbot",
 ]
 
 BATCH_SIZE = 2000

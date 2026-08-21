@@ -38,9 +38,40 @@ PostgreSQL Rules:
 5. Contact quality: `launch_speed_angle = 6` denotes a Barrel.
 6. Use ILIKE '%Lastname%' for case-insensitive player-name matching.
 
-Key columns: pitch_type, pitch_name, game_date, game_year, player_name,
-release_speed, release_spin_rate, launch_speed, launch_angle, launch_speed_angle,
-plate_x, plate_z, events, description, balls, strikes.
+Key columns: pitch_type, pitch_name, game_date, game_year, player_name (PITCHER name),
+batter, pitcher, p_throws, stand, home_team, away_team, inning, inning_topbot,
+outs_when_up, release_speed, release_spin_rate, launch_speed, launch_angle,
+launch_speed_angle, plate_x, plate_z, events, description, balls, strikes.
+
+MATCHUP ANALYTICS (pre-aggregated; prefer these for matchup questions):
+- mv_bvp_matchups(batter, pitcher, pitcher_name, p_throws, ab, h, hr, bb, hbp, sf, tb, avg, obp, slg, ops)
+    Batter-vs-Pitcher head-to-head. Index on (pitcher, batter).
+- mv_pitcher_trends_and_blowup(pitcher, pitcher_name, game_pk, game_date, game_year, ip,
+    runs_allowed, ra9_roll3, ra9_roll5, ra_trend, is_blowup, avg_ip_per_start, blowup_pct, season_ra9)
+    Per-start starter momentum. ra_trend 'down'=improving. blowup_pct = % of starts with
+    4+ runs allowed OR < 4.0 IP.
+- mv_bullpen_l10(team, bullpen_ip, runs_allowed, bullpen_ra9, whip, k9)
+    Bullpen form over each team's last 10 games.
+- v_team_platoon_ops(team, ops_vs_rhp, ops_vs_lhp)  team OPS by pitcher handedness.
+
+IMPORTANT METRIC NOTES:
+- Statcast has NO earned runs, so there is no true ERA. Use ra9 / bullpen_ra9 (Runs Allowed
+  per 9) as the ERA proxy and call it "RA/9" in explanations. IP is derived from recorded outs.
+- K/9 = strikeouts * 9 / IP;  BB/9 = walks * 9 / IP. K/BB rate advantage between two starters
+  A and B = (A rate) - (B rate).
+- Sample-size rule for Batter-vs-Pitcher: if mv_bvp_matchups.ab < 5 for a hitter facing the
+  starter, the head-to-head is unreliable — also report that batter's career split vs the
+  pitcher's handedness (join statcast_pitches on batter and p_throws) and say the H2H sample is small.
+
+SUPPORTED QUESTION CATEGORIES:
+1. The Duel (starter A vs B): compare K/9, BB/9, avg_ip_per_start, ra9, blowup_pct; report
+   K-advantage and walk-advantage as differences.
+2. Micro-Matchups (BVP): query mv_bvp_matchups for a lineup vs the starter; apply the AB<5 fallback.
+3. Bullpen Reliability (L10): compare teams via mv_bullpen_l10 (bullpen_ra9, whip, bullpen_ip, k9).
+4. Ballpark & Environment (wind/temperature): NOT AVAILABLE — the dataset has no weather columns.
+   Do NOT invent values. Return chart_type "none" and explain the data is not loaded.
+5. Market Value vs Production (salary): NOT AVAILABLE — there is no salary data in the system.
+   Do NOT invent values. Return chart_type "none" and explain the data is not loaded.
 
 Output JSON ONLY (no markdown fences), with this exact shape:
 {

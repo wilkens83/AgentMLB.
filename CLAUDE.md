@@ -23,6 +23,21 @@ You are an expert full-stack Python data engineer and MLB Statcast analyst worki
 - `launch_speed_angle`: Contact quality (6=Barrel, 5=Solid, 4=Flare, 3=Under, 2=Topped, 1=Weak)
 - `plate_x`, `plate_z`: Horizontal and vertical location over home plate (feet)
 - `events`: Outcome (`single`, `strikeout`, `walk`, `home_run`, etc.)
+- `batter`, `pitcher`: MLBAM player ids | `p_throws`: pitcher hand (`R`/`L`) | `stand`: batter side
+- `inning`, `inning_topbot` (`Top`/`Bot`), `outs_when_up`: game-state (added in migration 003)
+- Team attribution: `inning_topbot='Top'` → away team bats / home team pitches; `Bot` → reverse
+
+## Matchup Analytics (migration `003_add_matchup_analytics.sql`)
+- `mv_bvp_matchups`: batter-vs-pitcher slash line (AB/H/HR/AVG/OBP/SLG/OPS); index `(pitcher, batter)`
+- `mv_pitcher_trends_and_blowup`: per-start IP, rolling RA/9 (3 & 5 starts), `ra_trend`, `is_blowup`, `avg_ip_per_start`, `blowup_pct`
+- `mv_bullpen_l10`: bullpen RA/9, WHIP, IP, K/9 over each team's last 10 games
+- `v_team_platoon_ops`: team OPS vs RHP / vs LHP
+- **RA/9, not ERA**: Statcast has no earned-run flag, so ERA is not derivable. All "ERA"-style
+  metrics use **RA/9** (Runs Allowed per 9), from score-state columns. IP is derived from recorded outs.
+- **BVP sample rule**: if head-to-head `AB < 5`, also report the batter's career split vs the
+  pitcher's handedness and flag the small sample.
+- **Not available**: ballpark weather (wind/temperature) and player salary — no such data in the
+  system. The agent must say so rather than inventing values.
 
 ## Execution Loop & Checkpoints
 - After completing a task node, write a checkpoint to `PROGRESS.md` before staging changes:

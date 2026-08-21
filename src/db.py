@@ -186,13 +186,19 @@ CREATE TABLE IF NOT EXISTS statcast_pitches (
     iso_value DOUBLE PRECISION,
     launch_speed_angle INT,
     at_bat_number INT,
-    pitch_number INT
+    pitch_number INT,
+    inning INT,
+    outs_when_up INT,
+    inning_topbot VARCHAR(10)
 );
 
 CREATE INDEX IF NOT EXISTS idx_statcast_date ON statcast_pitches(game_date);
 CREATE INDEX IF NOT EXISTS idx_statcast_player ON statcast_pitches(player_name);
 CREATE INDEX IF NOT EXISTS idx_statcast_pitch_type ON statcast_pitches(pitch_type);
 CREATE INDEX IF NOT EXISTS idx_statcast_year ON statcast_pitches(game_year);
+CREATE INDEX IF NOT EXISTS idx_statcast_pitcher ON statcast_pitches(pitcher);
+CREATE INDEX IF NOT EXISTS idx_statcast_batter ON statcast_pitches(batter);
+CREATE INDEX IF NOT EXISTS idx_statcast_game_pk ON statcast_pitches(game_pk);
 """
 
 

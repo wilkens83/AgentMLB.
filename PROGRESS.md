@@ -109,3 +109,33 @@ The script re-applies the (idempotent) schema, loads in 5-day chunks, refreshes 
 ### Phase 4 — CI/CD & git (FIX APPLIED)
 - Added `.github/workflows/daily_ingest.yml` (was missing): cron `0 8 * * *` = 04:00 EDT, `secrets.DATABASE_URL`, workflow_dispatch, concurrency guard, runs `run_daily_update()`.
 - Working tree clean. Branch is `claude/mlb-analysis-system-dntpr7` (the repo's default branch) — this managed session cannot push to a literal `main`; the assigned branch serves as main.
+
+---
+
+## Checkpoint 5 — PitcherStat Matchup & Performance Grille
+
+### Phase 1 — DB (migration 003, applied live via MCP)
+- Enriched schema: added `inning`, `outs_when_up`, `inning_topbot` (+ indexes on pitcher/batter/game_pk).
+  Synced into db.py CREATE_TABLE_SQL, scripts/init_supabase.sql, and both ingestion COLS lists.
+- New objects (verified): `mv_bvp_matchups` (idx pitcher,batter), `mv_pitcher_trends_and_blowup`
+  (idx pitcher,game_date), `mv_bullpen_l10` (idx team), view `v_team_platoon_ops`.
+- **RA/9 substitution**: Statcast has no earned runs, so ERA is not derivable — all ERA-style
+  metrics use RA/9 (runs allowed per 9) from score-state columns; IP derived from recorded outs.
+  Team attribution via inning_topbot; starter/reliever via first pitcher of each game.
+
+### Phase 2 — Agent + helpers
+- `src/matchup.py`: pure helpers (BVP slash line, IP-from-outs, K/9, BB/9, rate_advantage,
+  sample-size fallback, highlight rule) mirroring the SQL.
+- Agent SYSTEM_PROMPT: documents the 4 new views, the 5 question categories, RA/9 note, BVP
+  AB<5 handedness fallback, and returns "not available" for weather & salary (no fabrication).
+- CLAUDE.md: matchup analytics + RA/9 + data-gap notes.
+
+### Phase 3 — Streamlit
+- `src/app.py` restructured into tabs: Chat + "⚾ Matchup Duel & BVP Analyzer" (Starter Duel card
+  with K/BB advantage badges, BVP grid with OPS>=.900 / AB>=10 highlight, Bullpen L10 + platoon,
+  3 sidebar deep-dive presets). Graceful empty/error states when DB is unloaded. Verified via
+  real headless render (screenshot 04_matchup_tab).
+
+### Phase 4 — Tests
+- `tests/test_matchup_analytics.py` added. `pytest`: **68 passed, 0 skipped**. All modules py_compile.
+- Matchup SQL (BVP grid, trends, bullpen+platoon join) validated against the live views via EXPLAIN.
