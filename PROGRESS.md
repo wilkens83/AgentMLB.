@@ -87,3 +87,25 @@ pip install -r requirements.txt
 python scripts/backfill_5_years.py            # 2021-2025, resumable via ingest_checkpoints
 ```
 The script re-applies the (idempotent) schema, loads in 5-day chunks, refreshes both MVs, and VACUUM ANALYZEs.
+
+---
+
+## Checkpoint 4 — End-to-end verification audit
+
+### Phase 1 — Database (verified live via Supabase MCP)
+- RLS enabled on `statcast_pitches` + `ingest_checkpoints`; all 3 policies present (anon/authenticated SELECT; service_role ALL; checkpoints service_role ALL).
+- 7 indexes + 2 PKs on base tables; both MVs exist and `ispopulated=true`; MV indexes present.
+- Data: `statcast_pitches` = 0 rows, `ingest_checkpoints` = 0 rows → backfill not yet run (handoff pending). Row-by-year / null-rate checks N/A until loaded.
+
+### Phase 2 — Backend & agent
+- `pytest`: 56 passed, 1 skipped (skip only when Streamlit absent).
+- 3 review queries: read-only SELECT ✅, ILIKE where a name is matched ✅, outer LIMIT 1000 cap ✅, valid Plotly JSON ✅. Negative controls (DROP/DELETE/multi-statement) rejected ✅.
+- Each candidate SQL validated against the real schema via EXPLAIN — valid plans using idx_statcast_barrels / idx_statcast_pitch_type / idx_statcast_year.
+- Note: live LLM generation + query execution need an API key + Postgres egress (neither in this container); the deterministic guard + schema-validity layers were verified instead.
+
+### Phase 3 — Streamlit UI (real headless launch + Playwright/Chromium)
+- Launched `streamlit run src/app.py` headless (HTTP 200); captured dashboard shell, live chat feed (graceful st.error when litellm absent), and the full success render path (SQL expander + Plotly scatter + data table + CSV button) via app.render_result with sample data.
+
+### Phase 4 — CI/CD & git (FIX APPLIED)
+- Added `.github/workflows/daily_ingest.yml` (was missing): cron `0 8 * * *` = 04:00 EDT, `secrets.DATABASE_URL`, workflow_dispatch, concurrency guard, runs `run_daily_update()`.
+- Working tree clean. Branch is `claude/mlb-analysis-system-dntpr7` (the repo's default branch) — this managed session cannot push to a literal `main`; the assigned branch serves as main.

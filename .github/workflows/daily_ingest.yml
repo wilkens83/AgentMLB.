@@ -1,0 +1,47 @@
+name: Daily Statcast Ingest
+
+# Appends yesterday's completed games to Supabase once per day.
+# Schedule: 4:00 AM America/New_York. GitHub Actions cron is UTC-only, so this
+# is pinned to 08:00 UTC = 04:00 EDT (UTC-4, in effect Mar-Nov, the MLB season).
+# During EST (UTC-5) this fires at 03:00 local; acceptable since the season runs
+# on EDT. Adjust to '0 9 * * *' if you need 4:00 AM year-round in EST.
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch: {}
+
+# Never run two ingests at once (they would race on the same date chunk).
+concurrency:
+  group: daily-statcast-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSLMODE: require
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify DATABASE_URL is configured
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "::error::DATABASE_URL secret is not set. Add it in repo Settings -> Secrets -> Actions."
+            exit 1
+          fi
+
+      - name: Run daily Statcast update
+        run: |
+          python -c "import sys; sys.path.insert(0, 'src'); from ingest import run_daily_update; run_daily_update()"
