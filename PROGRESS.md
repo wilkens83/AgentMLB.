@@ -63,3 +63,27 @@ python scripts/backfill_5_years.py                 # full 2021–2025, resumable
 python scripts/backfill_5_years.py --years 2024 2025
 ```
 Because of `ingest_checkpoints`, the job can be stopped and restarted with no duplicate downloads.
+
+---
+
+## Checkpoint 3 — Supabase provisioned via MCP + RLS
+
+### Database (created & verified through the Supabase MCP)
+- Project **agentmlb-statcast** (ref `ebtumpzsfutemxjnnuni`, us-east-1, free tier), status ACTIVE_HEALTHY.
+- Migration `init_statcast_schema`: `statcast_pitches`, `ingest_checkpoints`, 7 indexes
+  (+2 PKs), materialized views `mv_pitcher_arsenals` + `mv_batter_barrels`. Verified via list_tables/pg_matviews.
+- Migration `enable_rls_policies` (`scripts/002_enable_rls.sql`): RLS ON both tables;
+  `statcast_pitches` → anon/authenticated SELECT, service_role ALL; `ingest_checkpoints` → service_role ALL.
+  Verified via pg_policy.
+- API URL: https://ebtumpzsfutemxjnnuni.supabase.co
+
+### Backfill — HANDOFF (cannot run from this remote container)
+Verified empirically: raw Postgres TCP is blocked here (`:5432` and pooler `:6543` time out; egress is
+HTTPS-only), so the psycopg2 backfill cannot connect. Baseball Savant IS reachable over HTTPS (200).
+Run the backfill from a host with normal Postgres egress:
+```bash
+# .env must contain the direct DATABASE_URL (Dashboard -> Settings -> Database -> Connection string / URI)
+pip install -r requirements.txt
+python scripts/backfill_5_years.py            # 2021-2025, resumable via ingest_checkpoints
+```
+The script re-applies the (idempotent) schema, loads in 5-day chunks, refreshes both MVs, and VACUUM ANALYZEs.
