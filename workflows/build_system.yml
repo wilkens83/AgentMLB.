@@ -1,0 +1,55 @@
+workflow: build-mlb-supabase-system
+description: "Parallel build targeting Supabase, verified by independent checkers and committed to the working branch"
+
+# Diamond pattern: fan out to independent build workers, converge on
+# fresh-context checkers, then synthesize / test / commit.
+nodes:
+  # --- FAN OUT (independent workers, no shared state) ---
+  setup_supabase_db:
+    task: |
+      Implement `src/db.py` connecting to Supabase via `DATABASE_URL` with connection pooling,
+      PostgreSQL schema creation, and read-only query execution (statement timeout + row cap).
+    output: src/db.py
+
+  build_supabase_ingest:
+    task: |
+      Implement `src/ingest.py` using `psycopg2.extras.execute_values` for high-speed bulk inserts,
+      chunked multi-year backfill, and idempotent daily delta updates.
+    output: src/ingest.py
+
+  build_sql_agent:
+    task: |
+      Implement `src/agent.py` using LiteLLM with PostgreSQL-grounded Statcast prompts and
+      JSON output for SQL and Plotly configurations. Validate read-only before execution.
+    output: src/agent.py
+
+  build_ui:
+    task: |
+      Implement `src/app.py` for Streamlit with natural language chat, Plotly charts,
+      raw SQL expanders, and CSV downloads.
+    output: src/app.py
+
+  # --- INDEPENDENT CHECKERS (fresh context) ---
+  audit_sql_security:
+    task: |
+      Review `src/db.py` and `src/agent.py`. Verify that all queries use read-only sessions,
+      contain no SQL injection paths, and include `LIMIT` clauses and a statement timeout.
+    depends_on: [setup_supabase_db, build_sql_agent]
+    output: tests/audit_sql.md
+
+  audit_ingest_performance:
+    task: |
+      Review `src/ingest.py`. Verify batch sizing (2000 rows/batch), null handling,
+      numpy type coercion, and duplicate-prevention on `game_date`.
+    depends_on: [build_supabase_ingest]
+    output: tests/audit_ingest.md
+
+  # --- SYNTHESIS, TEST & COMMIT ---
+  finalize_and_commit:
+    task: |
+      1. Address any items flagged in `tests/audit_sql.md` and `tests/audit_ingest.md`.
+      2. Run the pytest suite in `tests/`.
+      3. Write a checkpoint to `PROGRESS.md` and commit all changes with a
+         semantic message: `feat: implement end-to-end Supabase MLB analytics platform`.
+    depends_on: [audit_sql_security, audit_ingest_performance, build_ui]
+    output: PROGRESS.md

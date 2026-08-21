@@ -1,0 +1,32 @@
+workflow: daily-statcast-pipeline
+description: "Daily ingestion of yesterday's completed games into Supabase, with verification"
+
+# Runs once per day (e.g. 04:00). Fetches yesterday's games, loads them
+# idempotently, verifies row counts, and reports.
+nodes:
+  ingest_yesterday:
+    task: |
+      Run `src.ingest.run_daily_update()`.
+      - Skip if `statcast_pitches` already has rows for yesterday's date.
+      - Otherwise fetch via pybaseball and bulk-insert (idempotent by game_date).
+    output: logs/daily_ingest.log
+
+  verify_ingest:
+    task: |
+      Query Supabase to confirm yesterday's data landed:
+        SELECT game_date, COUNT(*) FROM statcast_pitches
+        WHERE game_date = CURRENT_DATE - INTERVAL '1 day' GROUP BY game_date;
+      Fail loudly if the count is zero on a day games were played.
+    depends_on: [ingest_yesterday]
+    output: tests/verify_daily.md
+
+  report:
+    task: |
+      Summarize rows inserted, total table size, and last-updated timestamp.
+      Emit a one-line status suitable for a dashboard "Last Updated" badge.
+    depends_on: [verify_ingest]
+    output: logs/daily_report.md
+
+schedule:
+  cron: "0 4 * * *"   # 04:00 daily
+  timezone: "America/New_York"
